@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Smash Cannon 3D</title>
+  <script type="module" crossorigin src="/assets/index-Bqp2sQZe.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-B9oD1ndY.css">
+</head>
+<body>
+  <div id="game-ui">
+    <!-- CLEAN PRODUCTION LEVEL BADGE -->
+    <div id="level-title" class="level-badge">LEVEL 1</div>
+    
+    <div class="progress-container">
+      <div class="progress-bar-bg">
+        <div id="progress-bar" class="progress-bar-fill"></div>
+      </div>
+      <div id="destruction-text">KNOCK 50% OFF</div>
+    </div>
+
+    <div class="ammo-badge">
+      <span id="weapon-icon">💣</span> <span id="weapon-name">AMMO</span>: <span id="ammo-count">3</span>
+    </div>
+  </div>
+
+  <div id="end-modal" class="hidden">
+    <h1 id="end-title">LEVEL WON!</h1>
+    <p id="end-sub">The structure collapsed into the abyss!</p>
+    <div class="modal-actions">
+      <button id="modal-btn" class="action-btn">NEXT LEVEL ➔</button>
+      <button id="ad-ball-btn" class="ad-btn hidden">WATCH AD FOR +1 SHOT 🎬</button>
+      <button id="ad-skip-btn" class="ad-btn hidden">SKIP LEVEL (WATCH AD) ⏭️</button>
+    </div>
+  </div>
+
+  <canvas id="game-canvas"></canvas>
+</body>
+</html>
