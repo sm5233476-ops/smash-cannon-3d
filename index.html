@@ -7,8 +7,16 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div id="game-ui">
-    <!-- CLEAN PRODUCTION LEVEL BADGE -->
+  <!-- START MAIN MENU SCREEN -->
+  <div id="main-menu">
+    <div class="game-logo">SMASH CANNON 3D</div>
+    <div class="game-sublogo">PHYSICS DESTRUCTION</div>
+    <button id="play-btn" class="menu-btn">▶ PLAY GAME</button>
+    <button id="sound-btn" class="sound-toggle-btn">🔊 SOUND: ON</button>
+  </div>
+
+  <!-- IN-GAME HUD -->
+  <div id="game-ui" class="hidden">
     <div id="level-title" class="level-badge">LEVEL 1</div>
     
     <div class="progress-container">
@@ -23,6 +31,10 @@
     </div>
   </div>
 
+  <!-- AIMING CROSSHAIR -->
+  <div id="crosshair"></div>
+
+  <!-- VICTORY & DEFEAT MODAL -->
   <div id="end-modal" class="hidden">
     <h1 id="end-title">LEVEL WON!</h1>
     <p id="end-sub">The structure collapsed into the abyss!</p>
