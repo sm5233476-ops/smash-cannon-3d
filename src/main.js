@@ -1,25 +1,28 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 
-// --- PROCEDURAL AUDIO ENGINE ---
+// --- PROCEDURAL AUDIO & MUSIC SYNTHESIZER ---
+let soundEnabled = true;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playSound(type) {
+  if (!soundEnabled) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const now = audioCtx.currentTime;
 
   if (type === 'fire') {
+    // Cannon blast with deep sub-bass punch
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(220, now);
-    osc.frequency.exponentialRampToValueAtTime(35, now + 0.28);
-    gain.gain.setValueAtTime(0.5, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.28);
+    osc.frequency.setValueAtTime(260, now);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+    gain.gain.setValueAtTime(0.7, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
     osc.connect(gain);
     gain.connect(audioCtx.destination);
     osc.start(now);
-    osc.stop(now + 0.28);
+    osc.stop(now + 0.35);
   } else if (type === 'metal_hit') {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -33,7 +36,7 @@ function playSound(type) {
     osc.start(now);
     osc.stop(now + 0.22);
   } else if (type === 'crunch') {
-    const bufferSize = audioCtx.sampleRate * 0.14;
+    const bufferSize = audioCtx.sampleRate * 0.16;
     const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
@@ -43,12 +46,12 @@ function playSound(type) {
 
     const filter = audioCtx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(550, now);
+    filter.frequency.setValueAtTime(500, now);
     filter.Q.setValueAtTime(3.0, now);
 
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.4, now);
-    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+    gain.gain.setValueAtTime(0.45, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
 
     whiteNoise.connect(filter);
     filter.connect(gain);
@@ -81,7 +84,65 @@ function playSound(type) {
   }
 }
 
-// --- 50 UNIQUE HANDCRAFTED LEVELS CONFIGURATION ---
+// --- PROCEDURAL PBR TEXTURES (NO EXTERNAL IMAGES NEEDED) ---
+function createWoodTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(0, 0, 256, 256);
+  // Wood grain lines
+  ctx.strokeStyle = '#92400e';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 256; i += 8) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.bezierCurveTo(i + 5, 80, i - 5, 180, i, 256);
+    ctx.stroke();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createBrickTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#334155'; // Mortar
+  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = '#ef4444'; // Red Brick
+  const rows = 8, cols = 4;
+  const rh = 256 / rows, cw = 256 / cols;
+  for (let r = 0; r < rows; r++) {
+    const offset = (r % 2 === 0) ? 0 : cw / 2;
+    for (let c = -1; c <= cols; c++) {
+      ctx.fillRect(c * cw + offset + 2, r * rh + 2, cw - 4, rh - 4);
+    }
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createStoneTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#64748b';
+  ctx.fillRect(0, 0, 256, 256);
+  // Stone speckles
+  for (let i = 0; i < 600; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? '#475569' : '#94a3b8';
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 3, 3);
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+const woodTex = createWoodTexture();
+const brickTex = createBrickTexture();
+const stoneTex = createStoneTexture();
+
+// --- 50 HANDCRAFTED LEVELS CONFIGURATION ---
 const levelConfigs = {
   1:  { title: "SLENDER TOWER", ammo: 3, target: 50, type: "tower", l: 5 },
   2:  { title: "SKY CABIN", ammo: 4, target: 55, type: "house" },
@@ -135,19 +196,19 @@ const levelConfigs = {
   50: { title: "TITAN APEX (BOSS)", ammo: 5, target: 80, type: "titanapex" }
 };
 
-// 5 CLEAN, ROUND WEAPONS PER BIOME
 function getWeaponConfig(lvl) {
   if (lvl <= 10) return { name: "CANNONBALL", icon: "💣", mass: 32, type: "ball" };
-  if (lvl <= 20) return { name: "FIREBALL", icon: "☄️", mass: 35, type: "fireball" }; // Replaced Hammer!
+  if (lvl <= 20) return { name: "FIREBALL", icon: "☄️", mass: 35, type: "fireball" };
   if (lvl <= 30) return { name: "BOULDER", icon: "🪨", mass: 38, type: "rock" };
   if (lvl <= 40) return { name: "WRECKING MACE", icon: "⚙️", mass: 40, type: "wrecking" };
   return { name: "APEX CORE", icon: "⚡", mass: 44, type: "anvil" };
 }
 
-// SAVE & LOAD PROGRESS
+// GAME STATE
+let isGameStarted = false;
 let savedLevel = parseInt(localStorage.getItem('smash_cannon_level')) || 1;
 let currentLevel = savedLevel;
-let levelsPlayedSinceAd = 0; // Smart Ad Pacing Counter
+let levelsPlayedSinceAd = 0;
 
 let ammo = 3;
 let totalBlocks = 0;
@@ -160,6 +221,11 @@ let settleTimer = 0;
 let lastShootTime = 0;
 
 // UI Elements
+const mainMenu = document.getElementById('main-menu');
+const playBtn = document.getElementById('play-btn');
+const soundBtn = document.getElementById('sound-btn');
+const gameUI = document.getElementById('game-ui');
+const crosshair = document.getElementById('crosshair');
 const levelTitleEl = document.getElementById('level-title');
 const ammoEl = document.getElementById('ammo-count');
 const weaponIconEl = document.getElementById('weapon-icon');
@@ -173,17 +239,28 @@ const modalBtn = document.getElementById('modal-btn');
 const adBallBtn = document.getElementById('ad-ball-btn');
 const adSkipBtn = document.getElementById('ad-skip-btn');
 
+// Sound Toggle
+soundBtn.addEventListener('click', () => {
+  soundEnabled = !soundEnabled;
+  soundBtn.innerText = soundEnabled ? "🔊 SOUND: ON" : "🔇 SOUND: OFF";
+});
+
+// START GAME HANDLER
+playBtn.addEventListener('click', () => {
+  mainMenu.style.opacity = '0';
+  setTimeout(() => {
+    mainMenu.classList.add('hidden');
+    gameUI.classList.remove('hidden');
+    isGameStarted = true;
+    crosshair.style.display = 'block';
+  }, 400);
+});
+
 modalBtn.addEventListener('click', () => {
   if (endTitle.innerText.includes('WON')) {
     currentLevel = currentLevel >= 50 ? 1 : currentLevel + 1;
     localStorage.setItem('smash_cannon_level', currentLevel);
     levelsPlayedSinceAd++;
-
-    // SMART AD PACING: Check if it's time for an Interstitial Ad
-    if (currentLevel >= 5 && levelsPlayedSinceAd >= 2) {
-      console.log("Trigger Interstitial Ad here (CrazyGames / Poki SDK)!");
-      levelsPlayedSinceAd = 0;
-    }
   }
   loadLevel(currentLevel);
 });
@@ -207,7 +284,7 @@ adSkipBtn.addEventListener('click', () => {
 const canvas = document.getElementById('game-canvas');
 const scene = new THREE.Scene();
 
-const baseCamPos = new THREE.Vector3(0, 12, 28);
+const baseCamPos = new THREE.Vector3(0, 11, 26);
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 450);
 camera.position.copy(baseCamPos);
 camera.lookAt(0, 5, 0);
@@ -218,7 +295,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
 scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xfff7ea, 1.4);
@@ -228,6 +305,56 @@ sunLight.shadow.mapSize.width = 2048;
 sunLight.shadow.mapSize.height = 2048;
 sunLight.shadow.bias = -0.0004;
 scene.add(sunLight);
+
+// --- 3D INTERACTIVE MECHANICAL CANNON MODEL ---
+const cannonGroup = new THREE.Group();
+
+// Wooden Carriage Base
+const carriage = new THREE.Mesh(
+  new THREE.BoxGeometry(2.2, 0.6, 2.8),
+  new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.7 })
+);
+carriage.position.y = 0.3;
+carriage.castShadow = true;
+cannonGroup.add(carriage);
+
+// Wheels
+const wheelGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.3, 16);
+const wheelMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.3 });
+[-1.2, 1.2].forEach(x => {
+  const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(x, 0.4, 0.2);
+  wheel.castShadow = true;
+  cannonGroup.add(wheel);
+});
+
+// Metallic Barrel Assembly
+const barrelPivot = new THREE.Group();
+barrelPivot.position.set(0, 0.8, 0.4);
+
+const barrelMesh = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.42, 0.65, 3.2, 24),
+  new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.2 })
+);
+barrelMesh.rotation.x = -Math.PI / 2;
+barrelMesh.position.z = 1.0;
+barrelMesh.castShadow = true;
+barrelPivot.add(barrelMesh);
+
+// Barrel Muzzle Rim
+const rim = new THREE.Mesh(
+  new THREE.TorusGeometry(0.45, 0.08, 16, 32),
+  new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.9 })
+);
+rim.position.z = 2.6;
+barrelPivot.add(rim);
+
+cannonGroup.add(barrelPivot);
+cannonGroup.position.set(0, 0.8, 19); // Placed prominently in front of camera
+scene.add(cannonGroup);
+
+let cannonRecoil = 0;
 
 // --- VALLEY GROUND & RIVER ---
 const groundGeo = new THREE.PlaneGeometry(500, 500, 20, 20);
@@ -257,7 +384,7 @@ for (let i = 0; i < 150; i++) {
   scene.add(tree);
 }
 
-// --- BIOME UPDATE FUNCTION ---
+// --- BIOME UPDATE ---
 function applyBiome(lvl) {
   if (lvl <= 10) {
     scene.background = new THREE.Color(0x62b5fc);
@@ -267,7 +394,6 @@ function applyBiome(lvl) {
     riverMat.color.set(0x0284c7);
     riverMat.emissive = new THREE.Color(0x000000);
     ambientLight.color.set(0xffffff);
-    ambientLight.intensity = 0.9;
     sunLight.color.set(0xfff7ea);
   } else if (lvl <= 20) {
     scene.background = new THREE.Color(0xf97316);
@@ -277,7 +403,6 @@ function applyBiome(lvl) {
     riverMat.color.set(0xfbbf24);
     riverMat.emissive = new THREE.Color(0x221100);
     ambientLight.color.set(0xffeedd);
-    ambientLight.intensity = 0.95;
     sunLight.color.set(0xffedd5);
   } else if (lvl <= 30) {
     scene.background = new THREE.Color(0x2563eb);
@@ -287,7 +412,6 @@ function applyBiome(lvl) {
     riverMat.color.set(0x00f0ff);
     riverMat.emissive = new THREE.Color(0x006688);
     ambientLight.color.set(0xdbeafe);
-    ambientLight.intensity = 1.1;
     sunLight.color.set(0x93c5fd);
   } else if (lvl <= 40) {
     scene.background = new THREE.Color(0xfbbf24);
@@ -297,7 +421,6 @@ function applyBiome(lvl) {
     riverMat.color.set(0xb45309);
     riverMat.emissive = new THREE.Color(0x000000);
     ambientLight.color.set(0xfffbeb);
-    ambientLight.intensity = 1.0;
     sunLight.color.set(0xfef3c7);
   } else {
     scene.background = new THREE.Color(0xd946ef);
@@ -307,7 +430,6 @@ function applyBiome(lvl) {
     riverMat.color.set(0xff4500);
     riverMat.emissive = new THREE.Color(0xff2200);
     ambientLight.color.set(0xffe4e6);
-    ambientLight.intensity = 1.15;
     sunLight.color.set(0xfecdd3);
   }
 }
@@ -333,8 +455,6 @@ for (let i = 0; i < 16; i++) {
 
 // --- CANNON PHYSICS SETUP ---
 let world, physicsBodies = [], obstacleBodies = [], platformBody;
-const blockColors = [0xf43f5e, 0xf97316, 0xeab308, 0x06b6d4, 0x8b5cf6];
-const HEAVY_COLOR = 0x1e293b;
 
 function initPhysics() {
   world = new CANNON.World({ gravity: new CANNON.Vec3(0, -26, 0) });
@@ -353,7 +473,7 @@ function initPhysics() {
   const islandGroup = new THREE.Group();
   const cliff = new THREE.Mesh(
     new THREE.CylinderGeometry(islandRadius, islandRadius * 0.65, islandHeight, 32),
-    new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 })
+    new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.8 })
   );
   cliff.position.y = -islandHeight / 2 + 1;
   cliff.receiveShadow = true;
@@ -395,7 +515,7 @@ function spawnObstacleBumpers(lvl) {
 
     const bMesh = new THREE.Mesh(
       new THREE.BoxGeometry(1.6, 0.8, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.9 })
     );
     bMesh.position.set(x, 1.4, z);
     bMesh.rotation.y = -angle;
@@ -415,18 +535,37 @@ function spawnObstacleBumpers(lvl) {
   }
 }
 
+// --- BLOCK SPAWNER WITH REALISTIC PROCEDURAL TEXTURES ---
 const blockGeo = new THREE.BoxGeometry(1.2, 0.9, 1.2);
 const blockShape = new CANNON.Box(new CANNON.Vec3(0.6, 0.45, 0.6));
 
-function spawnBlock(x, y, z, color, isHeavy = false) {
-  const mesh = new THREE.Mesh(
-    blockGeo,
-    new THREE.MeshStandardMaterial({
-      color,
-      roughness: isHeavy ? 0.75 : 0.2,
-      metalness: isHeavy ? 0.5 : 0.1
-    })
-  );
+function spawnBlock(x, y, z, matType = "wood", isHeavy = false) {
+  let material;
+  if (isHeavy) {
+    material = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      metalness: 0.8,
+      roughness: 0.3
+    });
+  } else if (matType === "brick") {
+    material = new THREE.MeshStandardMaterial({
+      map: brickTex,
+      roughness: 0.6
+    });
+  } else if (matType === "stone") {
+    material = new THREE.MeshStandardMaterial({
+      map: stoneTex,
+      roughness: 0.7
+    });
+  } else {
+    // Wood
+    material = new THREE.MeshStandardMaterial({
+      map: woodTex,
+      roughness: 0.5
+    });
+  }
+
+  const mesh = new THREE.Mesh(blockGeo, material);
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -456,6 +595,8 @@ function spawnBlock(x, y, z, color, isHeavy = false) {
 }
 
 // --- LOAD LEVEL & BUILD STRUCTURES ---
+const mats = ["wood", "brick", "stone"];
+
 function loadLevel(lvl) {
   physicsBodies.forEach(item => {
     scene.remove(item.mesh);
@@ -489,57 +630,57 @@ function loadLevel(lvl) {
   // Levels 1 - 30
   if (conf.type === "tower") {
     for (let y = 0; y < conf.l; y++) {
-      const col = blockColors[y % blockColors.length];
+      const m = mats[y % mats.length];
       for (let x = -0.6; x <= 0.6; x += 1.2) {
-        for (let z = -0.6; z <= 0.6; z += 1.2) spawnBlock(x, startY + y * 0.92, z, col);
+        for (let z = -0.6; z <= 0.6; z += 1.2) spawnBlock(x, startY + y * 0.92, z, m);
       }
     }
   } else if (conf.type === "house") {
     for (let y = 0; y < 4; y++) {
-      const col = blockColors[y % blockColors.length];
+      const m = mats[y % mats.length];
       for (let x = -1.3; x <= 1.3; x += 1.3) {
         for (let z = -1.3; z <= 1.3; z += 1.3) {
           if (x === 0 && z === 0 && y < 3) continue;
-          spawnBlock(x, startY + y * 0.92, z, col);
+          spawnBlock(x, startY + y * 0.92, z, m);
         }
       }
     }
-    spawnBlock(0, startY + 4 * 0.92, 0, 0xf43f5e);
+    spawnBlock(0, startY + 4 * 0.92, 0, "brick");
   } else if (conf.type === "bridge") {
     [-1.8, 1.8].forEach(ox => {
-      for (let y = 0; y < 5; y++) spawnBlock(ox, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let y = 0; y < 5; y++) spawnBlock(ox, startY + y * 0.92, 0, mats[y % mats.length]);
     });
-    spawnBlock(0, startY + 4.92, 0, 0xfacc15);
+    spawnBlock(0, startY + 4.92, 0, "stone");
   } else if (conf.type === "tripeaks") {
     [-2, 0, 2].forEach(ox => {
-      for (let y = 0; y < 4; y++) spawnBlock(ox, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let y = 0; y < 4; y++) spawnBlock(ox, startY + y * 0.92, 0, mats[y % mats.length]);
     });
   } else if (conf.type === "fortress") {
     for (let y = 0; y < 5; y++) {
       [-1.8, 1.8].forEach(x => {
-        [-1.8, 1.8].forEach(z => spawnBlock(x, startY + y * 0.92, z, blockColors[y % blockColors.length]));
+        [-1.8, 1.8].forEach(z => spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length]));
       });
-      spawnBlock(0, startY + y * 0.92, 0, 0x06b6d4);
+      spawnBlock(0, startY + y * 0.92, 0, "stone");
     }
   } else if (conf.type === "arch") {
     for (let y = 0; y < 6; y++) {
-      spawnBlock(-2, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-      spawnBlock(2, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      spawnBlock(-2, startY + y * 0.92, 0, mats[y % mats.length]);
+      spawnBlock(2, startY + y * 0.92, 0, mats[y % mats.length]);
     }
-    for (let x = -1; x <= 1; x++) spawnBlock(x, startY + 5.92, 0, 0xf97316);
+    for (let x = -1; x <= 1; x++) spawnBlock(x, startY + 5.92, 0, "brick");
   } else if (conf.type === "wall") {
     for (let y = 0; y < 5; y++) {
-      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     }
   } else if (conf.type === "pyramid") {
     for (let y = 0; y < 4; y++) {
       const count = 4 - y;
-      for (let x = -(count - 1) * 0.6; x <= (count - 1) * 0.6; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let x = -(count - 1) * 0.6; x <= (count - 1) * 0.6; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     }
   } else if (conf.type === "twins") {
     [-1.8, 1.8].forEach(ox => {
       for (let y = 0; y < 6; y++) {
-        for (let z = -0.6; z <= 0.6; z += 1.2) spawnBlock(ox, startY + y * 0.92, z, blockColors[y % blockColors.length]);
+        for (let z = -0.6; z <= 0.6; z += 1.2) spawnBlock(ox, startY + y * 0.92, z, mats[y % mats.length]);
       }
     });
   } else if (conf.type === "skyscraper") {
@@ -547,7 +688,7 @@ function loadLevel(lvl) {
       for (let x = -1.2; x <= 1.2; x += 1.2) {
         for (let z = -1.2; z <= 1.2; z += 1.2) {
           if (x === 0 && z === 0) continue;
-          spawnBlock(x, startY + y * 0.92, z, blockColors[y % blockColors.length]);
+          spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length]);
         }
       }
     }
@@ -555,125 +696,125 @@ function loadLevel(lvl) {
     for (let y = 0; y < 5; y++) {
       for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) {
         const isH = (y === 0);
-        spawnBlock(Math.cos(a) * 2.4, startY + y * 0.92, Math.sin(a) * 2.4, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+        spawnBlock(Math.cos(a) * 2.4, startY + y * 0.92, Math.sin(a) * 2.4, mats[y % mats.length], isH);
       }
     }
   } else if (conf.type === "suspension") {
     [-2.2, 2.2].forEach(ox => {
-      for (let y = 0; y < 7; y++) spawnBlock(ox, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let y = 0; y < 7; y++) spawnBlock(ox, startY + y * 0.92, 0, mats[y % mats.length]);
     });
-    for (let x = -2.2; x <= 2.2; x += 1.1) spawnBlock(x, startY + 6.92, 0, HEAVY_COLOR, true);
+    for (let x = -2.2; x <= 2.2; x += 1.1) spawnBlock(x, startY + 6.92, 0, "stone", true);
   } else if (conf.type === "megalith") {
     [-2, 0, 2].forEach(ox => {
-      spawnBlock(ox, startY, 0, HEAVY_COLOR, true);
-      spawnBlock(ox, startY + 0.92, 0, HEAVY_COLOR, true);
+      spawnBlock(ox, startY, 0, "stone", true);
+      spawnBlock(ox, startY + 0.92, 0, "stone", true);
     });
     for (let y = 2; y < 6; y++) {
-      for (let x = -2; x <= 2; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let x = -2; x <= 2; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     }
   } else if (conf.type === "crane") {
-    for (let y = 0; y < 7; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-    for (let x = -3; x <= 3; x += 1.2) spawnBlock(x, startY + 6.92, 0, HEAVY_COLOR, true);
+    for (let y = 0; y < 7; y++) spawnBlock(0, startY + y * 0.92, 0, mats[y % mats.length]);
+    for (let x = -3; x <= 3; x += 1.2) spawnBlock(x, startY + 6.92, 0, "stone", true);
   } else if (conf.type === "colosseum") {
     for (let y = 0; y < 4; y++) {
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) spawnBlock(Math.cos(a) * 3, startY + y * 0.92, Math.sin(a) * 3, blockColors[y % blockColors.length]);
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 5) spawnBlock(Math.cos(a) * 3, startY + y * 0.92, Math.sin(a) * 3, mats[y % mats.length]);
     }
   } else if (conf.type === "hourglass") {
-    for (let x = -1.8; x <= 1.8; x += 1.2) spawnBlock(x, startY, 0, blockColors[0]);
-    spawnBlock(0, startY + 0.92, 0, blockColors[1]);
+    for (let x = -1.8; x <= 1.8; x += 1.2) spawnBlock(x, startY, 0, "wood");
+    spawnBlock(0, startY + 0.92, 0, "brick");
     for (let y = 2; y < 5; y++) {
-      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, HEAVY_COLOR, true);
+      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, "stone", true);
     }
   } else if (conf.type === "bastion") {
     [-2.2, 2.2].forEach(ox => {
       for (let y = 0; y < 8; y++) {
         const isH = y === 0 || y === 7;
-        spawnBlock(ox, startY + y * 0.92, 0, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+        spawnBlock(ox, startY + y * 0.92, 0, mats[y % mats.length], isH);
       }
     });
-    for (let y = 0; y < 4; y++) spawnBlock(0, startY + y * 0.92, 0, 0x06b6d4);
+    for (let y = 0; y < 4; y++) spawnBlock(0, startY + y * 0.92, 0, "stone");
   } else if (conf.type === "citadel") {
     for (let y = 0; y < 6; y++) {
       for (let x = -2; x <= 2; x += 2) {
         for (let z = -2; z <= 2; z += 2) {
           const isH = (y === 0);
-          spawnBlock(x, startY + y * 0.92, z, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+          spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length], isH);
         }
       }
     }
   } else if (conf.type === "spiral") {
     for (let y = 0; y < 9; y++) {
       const a = y * 0.6;
-      spawnBlock(Math.cos(a) * 1.5, startY + y * 0.92, Math.sin(a) * 1.5, blockColors[y % blockColors.length]);
-      spawnBlock(-Math.cos(a) * 1.5, startY + y * 0.92, -Math.sin(a) * 1.5, blockColors[y % blockColors.length]);
+      spawnBlock(Math.cos(a) * 1.5, startY + y * 0.92, Math.sin(a) * 1.5, mats[y % mats.length]);
+      spawnBlock(-Math.cos(a) * 1.5, startY + y * 0.92, -Math.sin(a) * 1.5, mats[y % mats.length]);
     }
   } else if (conf.type === "boss") {
     for (let y = 0; y < 10; y++) {
       const isH = (y < 2);
       for (let x = -1.2; x <= 1.2; x += 1.2) {
-        for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + y * 0.92, z, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+        for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length], isH);
       }
     }
   } else if (conf.type === "battlements") {
     for (let y = 0; y < 5; y++) {
-      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     }
-    [-2.4, 0, 2.4].forEach(x => spawnBlock(x, startY + 5 * 0.92, 0, HEAVY_COLOR, true));
+    [-2.4, 0, 2.4].forEach(x => spawnBlock(x, startY + 5 * 0.92, 0, "stone", true));
   } else if (conf.type === "triplesuspension") {
     [-2.4, 0, 2.4].forEach(x => {
-      for (let y = 0; y < 6; y++) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let y = 0; y < 6; y++) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     });
-    for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
+    for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + 6 * 0.92, 0, "stone", true);
   } else if (conf.type === "stiltbunker") {
-    spawnBlock(-1.5, startY, 0, blockColors[0]);
-    spawnBlock(1.5, startY, 0, blockColors[0]);
+    spawnBlock(-1.5, startY, 0, "wood");
+    spawnBlock(1.5, startY, 0, "wood");
     for (let y = 1; y < 5; y++) {
       for (let x = -2.4; x <= 2.4; x += 1.2) {
-        for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + y * 0.92, z, HEAVY_COLOR, true);
+        for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + y * 0.92, z, "stone", true);
       }
     }
   } else if (conf.type === "stonehenge") {
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
       const x = Math.cos(a) * 2.5;
       const z = Math.sin(a) * 2.5;
-      spawnBlock(x, startY, z, HEAVY_COLOR, true);
-      spawnBlock(x, startY + 0.92, z, HEAVY_COLOR, true);
-      spawnBlock(x, startY + 1.84, z, blockColors[2]);
+      spawnBlock(x, startY, z, "stone", true);
+      spawnBlock(x, startY + 0.92, z, "stone", true);
+      spawnBlock(x, startY + 1.84, z, "brick");
     }
   } else if (conf.type === "giantcross") {
-    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, mats[y % mats.length]);
     for (let x = -2.4; x <= 2.4; x += 1.2) {
-      if (x !== 0) spawnBlock(x, startY + 5 * 0.92, 0, HEAVY_COLOR, true);
+      if (x !== 0) spawnBlock(x, startY + 5 * 0.92, 0, "stone", true);
     }
   } else if (conf.type === "doubledeck") {
     [-1.8, 1.8].forEach(x => {
       [-1.8, 1.8].forEach(z => {
-        spawnBlock(x, startY, z, blockColors[0]);
-        spawnBlock(x, startY + 0.92, z, blockColors[1]);
+        spawnBlock(x, startY, z, "wood");
+        spawnBlock(x, startY + 0.92, z, "brick");
       });
     });
     for (let x = -1.8; x <= 1.8; x += 1.2) {
-      for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY + 2 * 0.92, z, HEAVY_COLOR, true);
+      for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY + 2 * 0.92, z, "stone", true);
     }
-    for (let y = 3; y < 7; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+    for (let y = 3; y < 7; y++) spawnBlock(0, startY + y * 0.92, 0, mats[y % mats.length]);
   } else if (conf.type === "cathedral") {
     for (let y = 0; y < 3; y++) {
-      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, HEAVY_COLOR, true);
+      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, "stone", true);
     }
     for (let y = 3; y < 6; y++) {
-      for (let x = -1.2; x <= 1.2; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      for (let x = -1.2; x <= 1.2; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, mats[y % mats.length]);
     }
-    for (let y = 6; y < 9; y++) spawnBlock(0, startY + y * 0.92, 0, 0xfacc15);
+    for (let y = 6; y < 9; y++) spawnBlock(0, startY + y * 0.92, 0, "brick");
   } else if (conf.type === "jenga") {
     for (let y = 0; y < 9; y++) {
       const isX = (y % 2 === 0);
-      const col = blockColors[y % blockColors.length];
+      const m = mats[y % mats.length];
       if (isX) {
-        spawnBlock(-0.8, startY + y * 0.92, 0, col);
-        spawnBlock(0.8, startY + y * 0.92, 0, col);
+        spawnBlock(-0.8, startY + y * 0.92, 0, m);
+        spawnBlock(0.8, startY + y * 0.92, 0, m);
       } else {
-        spawnBlock(0, startY + y * 0.92, -0.8, col);
-        spawnBlock(0, startY + y * 0.92, 0.8, col);
+        spawnBlock(0, startY + y * 0.92, -0.8, m);
+        spawnBlock(0, startY + y * 0.92, 0.8, m);
       }
     }
   } else if (conf.type === "strongholds") {
@@ -681,7 +822,7 @@ function loadLevel(lvl) {
       for (let y = 0; y < 7; y++) {
         for (let z = -0.8; z <= 0.8; z += 1.6) {
           const isH = (y === 0 || y === 6);
-          spawnBlock(ox, startY + y * 0.92, z, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+          spawnBlock(ox, startY + y * 0.92, z, mats[y % mats.length], isH);
         }
       }
     });
@@ -691,7 +832,7 @@ function loadLevel(lvl) {
       for (let x = -1.8; x <= 1.8; x += 1.2) {
         for (let z = -1.2; z <= 1.2; z += 1.2) {
           if (Math.abs(x) < 1.0 && Math.abs(z) < 1.0 && y > 2) continue;
-          spawnBlock(x, startY + y * 0.92, z, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+          spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length], isH);
         }
       }
     }
@@ -702,151 +843,172 @@ function loadLevel(lvl) {
       const count = 5 - step;
       const span = (count - 1) * 0.6;
       for (let x = -span; x <= span; x += 1.2) {
-        for (let z = -span; z <= span; z += 1.2) spawnBlock(x, startY + step * 0.92, z, step === 0 ? HEAVY_COLOR : blockColors[step % blockColors.length], step === 0);
+        for (let z = -span; z <= span; z += 1.2) spawnBlock(x, startY + step * 0.92, z, mats[step % mats.length], step === 0);
       }
     }
   } else if (conf.type === "starfort") {
     for (let y = 0; y < 6; y++) {
-      const col = blockColors[y % blockColors.length];
-      spawnBlock(0, startY + y * 0.92, 0, col);
-      spawnBlock(-1.5, startY + y * 0.92, 0, col);
-      spawnBlock(1.5, startY + y * 0.92, 0, col);
-      spawnBlock(0, startY + y * 0.92, -1.5, col);
-      spawnBlock(0, startY + y * 0.92, 1.5, col);
+      const m = mats[y % mats.length];
+      spawnBlock(0, startY + y * 0.92, 0, m);
+      spawnBlock(-1.5, startY + y * 0.92, 0, m);
+      spawnBlock(1.5, startY + y * 0.92, 0, m);
+      spawnBlock(0, startY + y * 0.92, -1.5, m);
+      spawnBlock(0, startY + y * 0.92, 1.5, m);
     }
-    spawnBlock(0, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
+    spawnBlock(0, startY + 6 * 0.92, 0, "stone", true);
   } else if (conf.type === "canopy") {
     for (let y = 0; y < 6; y++) {
-      spawnBlock(-2, startY + y * 0.92, 0, blockColors[0]);
-      spawnBlock(2, startY + y * 0.92, 0, blockColors[0]);
+      spawnBlock(-2, startY + y * 0.92, 0, "wood");
+      spawnBlock(2, startY + y * 0.92, 0, "wood");
     }
     for (let x = -3.2; x <= 3.2; x += 1.1) {
-      for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 6 * 0.92, z, HEAVY_COLOR, true);
+      for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 6 * 0.92, z, "stone", true);
     }
   } else if (conf.type === "diamond") {
     const coords = [[0, -2], [-1.2, -1.2], [1.2, -1.2], [-2, 0], [2, 0], [-1.2, 1.2], [1.2, 1.2], [0, 2]];
     for (let y = 0; y < 6; y++) {
-      const col = blockColors[y % blockColors.length];
-      coords.forEach(pt => spawnBlock(pt[0], startY + y * 0.92, pt[1], col));
+      const m = mats[y % mats.length];
+      coords.forEach(pt => spawnBlock(pt[0], startY + y * 0.92, pt[1], m));
     }
   } else if (conf.type === "windmill") {
-    for (let y = 0; y < 9; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+    for (let y = 0; y < 9; y++) spawnBlock(0, startY + y * 0.92, 0, mats[y % mats.length]);
     for (let o = 1; o <= 3; o++) {
-      spawnBlock(-o * 1.2, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
-      spawnBlock(o * 1.2, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
-      spawnBlock(0, startY + (6 + o) * 0.92, 0, HEAVY_COLOR, true);
-      spawnBlock(0, startY + (6 - o) * 0.92, 0, HEAVY_COLOR, true);
+      spawnBlock(-o * 1.2, startY + 6 * 0.92, 0, "stone", true);
+      spawnBlock(o * 1.2, startY + 6 * 0.92, 0, "stone", true);
+      spawnBlock(0, startY + (6 + o) * 0.92, 0, "stone", true);
+      spawnBlock(0, startY + (6 - o) * 0.92, 0, "stone", true);
     }
   } else if (conf.type === "thammer") {
-    for (let y = 0; y < 6; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[1]);
+    for (let y = 0; y < 6; y++) spawnBlock(0, startY + y * 0.92, 0, "wood");
     for (let x = -3; x <= 3; x += 1.2) {
-      for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 6 * 0.92, z, HEAVY_COLOR, true);
+      for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 6 * 0.92, z, "stone", true);
     }
   } else if (conf.type === "pagoda") {
-    for (let x = -1.8; x <= 1.8; x += 1.2) for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY, z, blockColors[0]);
-    for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + 0.92, 0, HEAVY_COLOR, true);
-    for (let x = -1.2; x <= 1.2; x += 1.2) for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 2 * 0.92, z, blockColors[2]);
-    for (let x = -1.8; x <= 1.8; x += 1.2) spawnBlock(x, startY + 3 * 0.92, 0, HEAVY_COLOR, true);
-    spawnBlock(0, startY + 4 * 0.92, 0, blockColors[4]);
-    spawnBlock(0, startY + 5 * 0.92, 0, 0xfacc15);
+    for (let x = -1.8; x <= 1.8; x += 1.2) for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY, z, "wood");
+    for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + 0.92, 0, "stone", true);
+    for (let x = -1.2; x <= 1.2; x += 1.2) for (let z = -1.2; z <= 1.2; z += 1.2) spawnBlock(x, startY + 2 * 0.92, z, "brick");
+    for (let x = -1.8; x <= 1.8; x += 1.2) spawnBlock(x, startY + 3 * 0.92, 0, "stone", true);
+    spawnBlock(0, startY + 4 * 0.92, 0, "stone");
+    spawnBlock(0, startY + 5 * 0.92, 0, "brick");
   } else if (conf.type === "arctriomphe") {
     for (let y = 0; y < 6; y++) {
       for (let z = -0.8; z <= 0.8; z += 1.6) {
-        spawnBlock(-2.2, startY + y * 0.92, z, blockColors[y % blockColors.length]);
-        spawnBlock(2.2, startY + y * 0.92, z, blockColors[y % blockColors.length]);
+        spawnBlock(-2.2, startY + y * 0.92, z, mats[y % mats.length]);
+        spawnBlock(2.2, startY + y * 0.92, z, mats[y % mats.length]);
       }
     }
     for (let x = -2.4; x <= 2.4; x += 1.2) {
-      for (let z = -0.8; z <= 0.8; z += 1.6) spawnBlock(x, startY + 6 * 0.92, z, HEAVY_COLOR, true);
+      for (let z = -0.8; z <= 0.8; z += 1.6) spawnBlock(x, startY + 6 * 0.92, z, "stone", true);
     }
   } else if (conf.type === "cantilever") {
     for (let y = 0; y < 6; y++) {
-      spawnBlock(-2, startY + y * 0.92, 0, blockColors[3]);
-      spawnBlock(-1, startY + y * 0.92, 0, blockColors[3]);
+      spawnBlock(-2, startY + y * 0.92, 0, "stone");
+      spawnBlock(-1, startY + y * 0.92, 0, "stone");
     }
-    for (let x = -1; x <= 3.2; x += 1.1) spawnBlock(x, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
+    for (let x = -1; x <= 3.2; x += 1.1) spawnBlock(x, startY + 6 * 0.92, 0, "stone", true);
   } else if (conf.type === "skybridge") {
     [-2.2, 2.2].forEach(ox => {
       for (let y = 0; y < 7; y++) {
-        spawnBlock(ox, startY + y * 0.92, -0.6, blockColors[y % blockColors.length]);
-        spawnBlock(ox, startY + y * 0.92, 0.6, blockColors[y % blockColors.length]);
+        spawnBlock(ox, startY + y * 0.92, -0.6, mats[y % mats.length]);
+        spawnBlock(ox, startY + y * 0.92, 0.6, mats[y % mats.length]);
       }
     });
-    for (let x = -1.2; x <= 1.2; x += 1.2) spawnBlock(x, startY + 5 * 0.92, 0, HEAVY_COLOR, true);
+    for (let x = -1.2; x <= 1.2; x += 1.2) spawnBlock(x, startY + 5 * 0.92, 0, "stone", true);
   } else if (conf.type === "octagonsilo") {
     for (let y = 0; y < 6; y++) {
-      const col = blockColors[y % blockColors.length];
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) spawnBlock(Math.cos(a) * 2.8, startY + y * 0.92, Math.sin(a) * 2.8, col);
+      const m = mats[y % mats.length];
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 4) spawnBlock(Math.cos(a) * 2.8, startY + y * 0.92, Math.sin(a) * 2.8, m);
     }
-    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, HEAVY_COLOR, true);
+    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, "stone", true);
   } else if (conf.type === "doomhourglass") {
-    for (let x = -2; x <= 2; x += 1.3) for (let z = -2; z <= 2; z += 1.3) spawnBlock(x, startY, z, blockColors[0]);
-    spawnBlock(0, startY + 0.92, 0, 0xfacc15);
+    for (let x = -2; x <= 2; x += 1.3) for (let z = -2; z <= 2; z += 1.3) spawnBlock(x, startY, z, "wood");
+    spawnBlock(0, startY + 0.92, 0, "brick");
     for (let y = 2; y < 6; y++) {
-      for (let x = -2.2; x <= 2.2; x += 1.1) for (let z = -1.1; z <= 1.1; z += 1.1) spawnBlock(x, startY + y * 0.92, z, HEAVY_COLOR, true);
+      for (let x = -2.2; x <= 2.2; x += 1.1) for (let z = -1.1; z <= 1.1; z += 1.1) spawnBlock(x, startY + y * 0.92, z, "stone", true);
     }
   } else if (conf.type === "asymtowers") {
-    for (let y = 0; y < 9; y++) spawnBlock(-1.8, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-    for (let y = 0; y < 4; y++) spawnBlock(1.8, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-    spawnBlock(0, startY + 3.92, 0, HEAVY_COLOR, true);
+    for (let y = 0; y < 9; y++) spawnBlock(-1.8, startY + y * 0.92, 0, mats[y % mats.length]);
+    for (let y = 0; y < 4; y++) spawnBlock(1.8, startY + y * 0.92, 0, mats[y % mats.length]);
+    spawnBlock(0, startY + 3.92, 0, "stone", true);
   } else if (conf.type === "suntemple") {
     for (let a = 0; a < Math.PI * 2; a += Math.PI / 3) {
-      spawnBlock(Math.cos(a) * 2.6, startY, Math.sin(a) * 2.6, HEAVY_COLOR, true);
-      spawnBlock(Math.cos(a) * 2.6, startY + 0.92, Math.sin(a) * 2.6, blockColors[1]);
+      spawnBlock(Math.cos(a) * 2.6, startY, Math.sin(a) * 2.6, "stone", true);
+      spawnBlock(Math.cos(a) * 2.6, startY + 0.92, Math.sin(a) * 2.6, "brick");
     }
-    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-    spawnBlock(0, startY + 8 * 0.92, 0, 0xfacc15);
+    for (let y = 0; y < 8; y++) spawnBlock(0, startY + y * 0.92, 0, mats[y % mats.length]);
+    spawnBlock(0, startY + 8 * 0.92, 0, "stone");
   } else if (conf.type === "spiralstair") {
     for (let y = 0; y < 10; y++) {
       const a = y * 0.7;
-      spawnBlock(Math.cos(a) * 1.8, startY + y * 0.92, Math.sin(a) * 1.8, blockColors[y % blockColors.length]);
-      spawnBlock(0, startY + y * 0.92, 0, HEAVY_COLOR, true);
+      spawnBlock(Math.cos(a) * 1.8, startY + y * 0.92, Math.sin(a) * 1.8, mats[y % mats.length]);
+      spawnBlock(0, startY + y * 0.92, 0, "stone", true);
     }
   } else if (conf.type === "threepegs") {
-    spawnBlock(-2, startY, -1.2, blockColors[0]);
-    spawnBlock(2, startY, -1.2, blockColors[0]);
-    spawnBlock(0, startY, 1.8, blockColors[0]);
+    spawnBlock(-2, startY, -1.2, "wood");
+    spawnBlock(2, startY, -1.2, "wood");
+    spawnBlock(0, startY, 1.8, "wood");
     for (let y = 1; y < 5; y++) {
-      for (let x = -2.4; x <= 2.4; x += 1.2) for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY + y * 0.92, z, HEAVY_COLOR, true);
+      for (let x = -2.4; x <= 2.4; x += 1.2) {
+        for (let z = -1.8; z <= 1.8; z += 1.2) spawnBlock(x, startY + y * 0.92, z, "stone", true);
+      }
     }
   } else if (conf.type === "plusfort") {
     for (let y = 0; y < 6; y++) {
-      const col = blockColors[y % blockColors.length];
-      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, col);
-      for (let z = -2.4; z <= 2.4; z += 1.2) if (z !== 0) spawnBlock(0, startY + y * 0.92, z, col);
+      const m = mats[y % mats.length];
+      for (let x = -2.4; x <= 2.4; x += 1.2) spawnBlock(x, startY + y * 0.92, 0, m);
+      for (let z = -2.4; z <= 2.4; z += 1.2) if (z !== 0) spawnBlock(0, startY + y * 0.92, z, m);
     }
-    spawnBlock(0, startY + 6 * 0.92, 0, HEAVY_COLOR, true);
+    spawnBlock(0, startY + 6 * 0.92, 0, "stone", true);
   } else if (conf.type === "labyrinth") {
     for (let y = 0; y < 5; y++) {
-      for (let x = -2.4; x <= 2.4; x += 2.4) for (let z = -2.4; z <= 2.4; z += 2.4) spawnBlock(x, startY + y * 0.92, z, HEAVY_COLOR, true);
-      for (let x = -1; x <= 1; x += 1.2) for (let z = -1; z <= 1; z += 1.2) spawnBlock(x, startY + y * 0.92, z, blockColors[y % blockColors.length]);
+      for (let x = -2.4; x <= 2.4; x += 2.4) {
+        for (let z = -2.4; z <= 2.4; z += 2.4) spawnBlock(x, startY + y * 0.92, z, "stone", true);
+      }
+      for (let x = -1; x <= 1; x += 1.2) {
+        for (let z = -1; z <= 1; z += 1.2) spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length]);
+      }
     }
   } else if (conf.type === "gothic") {
     for (let y = 0; y < 9; y++) {
-      spawnBlock(-2.2, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
-      spawnBlock(2.2, startY + y * 0.92, 0, blockColors[y % blockColors.length]);
+      spawnBlock(-2.2, startY + y * 0.92, 0, mats[y % mats.length]);
+      spawnBlock(2.2, startY + y * 0.92, 0, mats[y % mats.length]);
     }
     for (let y = 0; y < 5; y++) {
-      spawnBlock(-1.1, startY + y * 0.92, 0, HEAVY_COLOR, true);
-      spawnBlock(1.1, startY + y * 0.92, 0, HEAVY_COLOR, true);
-      spawnBlock(0, startY + y * 0.92, 0, blockColors[3]);
+      spawnBlock(-1.1, startY + y * 0.92, 0, "stone", true);
+      spawnBlock(1.1, startY + y * 0.92, 0, "stone", true);
+      spawnBlock(0, startY + y * 0.92, 0, "brick");
     }
   } else if (conf.type === "titanapex") {
     for (let y = 0; y < 10; y++) {
       const isH = (y < 3);
       const span = y < 4 ? 2.4 : (y < 7 ? 1.6 : 0.8);
-      for (let x = -span; x <= span; x += 1.2) for (let z = -span; z <= span; z += 1.2) spawnBlock(x, startY + y * 0.92, z, isH ? HEAVY_COLOR : blockColors[y % blockColors.length], isH);
+      for (let x = -span; x <= span; x += 1.2) for (let z = -span; z <= span; z += 1.2) spawnBlock(x, startY + y * 0.92, z, mats[y % mats.length], isH);
     }
-    spawnBlock(0, startY + 10 * 0.92, 0, 0xfacc15);
+    spawnBlock(0, startY + 10 * 0.92, 0, "stone", true);
   }
 }
 
-// --- SHOOT PROJECTILES (5 ROUND SLEEK WEAPONS) ---
+// --- INTERACTIVE AIMING & FIRING ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
+const targetPoint = new THREE.Vector3(0, 5, 0);
+
+window.addEventListener('pointermove', (e) => {
+  if (!isGameStarted) return;
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  crosshair.style.left = `${e.clientX}px`;
+  crosshair.style.top = `${e.clientY}px`;
+
+  // Aim Cannon barrel toward crosshair in 3D
+  raycaster.setFromCamera(mouse, camera);
+  const intersectPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  raycaster.ray.intersectPlane(intersectPlane, targetPoint);
+  barrelPivot.lookAt(targetPoint.x, targetPoint.y, targetPoint.z);
+});
 
 function shoot(event) {
-  if (ammo <= 0 || isLevelEnded) return;
+  if (!isGameStarted || ammo <= 0 || isLevelEnded) return;
 
   const clientX = event.clientX || (event.touches && event.touches[0].clientX);
   const clientY = event.clientY || (event.touches && event.touches[0].clientY);
@@ -862,23 +1024,20 @@ function shoot(event) {
   let pMesh, pBody;
 
   if (weapon.type === "fireball") {
-    // ☄️ MOLTEN FIREBALL (Replaced Hammer)
     pMesh = new THREE.Mesh(
       new THREE.SphereGeometry(0.8, 24, 24),
       new THREE.MeshStandardMaterial({
         color: 0xf97316,
         emissive: 0xff3b00,
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 0.9,
         roughness: 0.2
       })
     );
     pBody = new CANNON.Body({ mass: weapon.mass, shape: new CANNON.Sphere(0.8) });
   } else if (weapon.type === "rock") {
-    // 🪨 GRANITE BOULDER
-    pMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85), new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9 }));
+    pMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85), new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.9 }));
     pBody = new CANNON.Body({ mass: weapon.mass, shape: new CANNON.Sphere(0.85) });
   } else if (weapon.type === "wrecking") {
-    // ⚙️ SPIKED WRECKING BALL
     const group = new THREE.Group();
     const core = new THREE.Mesh(
       new THREE.SphereGeometry(0.75, 24, 24),
@@ -903,11 +1062,10 @@ function shoot(event) {
     pBody = new CANNON.Body({ mass: weapon.mass, shape: new CANNON.Sphere(0.85) });
     pBody.angularVelocity.set(8, 6, 4);
   } else if (weapon.type === "anvil") {
-    // ⚡ GOLDEN APEX CORE
     pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 32), new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.95, roughness: 0.1 }));
     pBody = new CANNON.Body({ mass: weapon.mass, shape: new CANNON.Sphere(0.85) });
   } else {
-    // ⚪ STEEL CANNONBALL
+    // Standard Steel Cannonball
     pMesh = new THREE.Mesh(new THREE.SphereGeometry(0.75, 32, 32), new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.95, roughness: 0.15 }));
     pBody = new CANNON.Body({ mass: weapon.mass, shape: new CANNON.Sphere(0.75) });
   }
@@ -915,11 +1073,16 @@ function shoot(event) {
   pMesh.castShadow = true;
   scene.add(pMesh);
 
-  const spawnPos = camera.position.clone().add(shootDir.clone().multiplyScalar(2.5));
-  pBody.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+  // Spawn exactly at cannon muzzle tip!
+  const muzzlePos = new THREE.Vector3();
+  rim.getWorldPosition(muzzlePos);
+  pBody.position.set(muzzlePos.x, muzzlePos.y, muzzlePos.z);
 
   const force = 52;
   pBody.velocity.set(shootDir.x * force, shootDir.y * force, shootDir.z * force);
+
+  // CANNON RECOIL KICKBACK
+  cannonRecoil = 0.8;
 
   pBody.addEventListener('collide', (e) => {
     const impact = e.contact ? e.contact.getImpactVelocityAlongNormal() : 0;
@@ -946,7 +1109,7 @@ function shoot(event) {
 }
 
 window.addEventListener('pointerdown', (e) => {
-  if (e.target.closest('#end-modal')) return;
+  if (e.target.closest('#end-modal') || e.target.closest('#main-menu')) return;
   shoot(e);
 });
 
@@ -1027,7 +1190,9 @@ function showModal(isWin, msg) {
 initPhysics();
 loadLevel(currentLevel);
 
+let menuAngle = 0;
 const timeStep = 1 / 60;
+
 function animate() {
   requestAnimationFrame(animate);
 
@@ -1048,17 +1213,36 @@ function animate() {
     riverMesh.position.z = (performance.now() * 0.005) % 20;
   }
 
+  // CINEMATIC MENU CAMERA ROTATION
+  if (!isGameStarted) {
+    menuAngle += 0.003;
+    camera.position.x = Math.sin(menuAngle) * 26;
+    camera.position.z = Math.cos(menuAngle) * 26;
+    camera.position.y = 12;
+    camera.lookAt(0, 5, 0);
+  } else {
+    // Cannon Recoil recovery animation
+    if (cannonRecoil > 0) {
+      cannonGroup.position.z = 19 + cannonRecoil;
+      cannonRecoil *= 0.85;
+      if (cannonRecoil < 0.02) cannonRecoil = 0;
+    } else {
+      cannonGroup.position.z = 19;
+    }
+  }
+
+  // Screen Shake
   if (screenShake > 0) {
     camera.position.x = baseCamPos.x + (Math.random() - 0.5) * screenShake;
     camera.position.y = baseCamPos.y + (Math.random() - 0.5) * screenShake;
     screenShake *= 0.82;
     if (screenShake < 0.01) {
       screenShake = 0;
-      camera.position.copy(baseCamPos);
+      if (isGameStarted) camera.position.copy(baseCamPos);
     }
   }
 
-  updateDestruction();
+  if (isGameStarted) updateDestruction();
   renderer.render(scene, camera);
 }
 
